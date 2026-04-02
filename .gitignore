@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Gradle / Android build outputs
+.gradle/
+.gradle-local/
+.gradle-cache/
+.gradle-temp/
+build/
+app/build/
+captures/
+outputs/
+
+# Local machine configuration
+local.properties
+android-sdk/
+android-home/
+.android-user/
+
+# IDE files
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# Signing / secrets
+*.keystore
+*.jks
+*.p12
+
+# Artifacts
+*.apk
+*.aab
+
+# Historical snapshots / temp directories
+app_副本*/
+app-不能用/

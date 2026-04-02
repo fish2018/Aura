@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorSurface"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/urlInputLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:boxBackgroundMode="filled"
+        app:boxBackgroundColor="@color/surfaceVariant"
+        app:boxStrokeColor="@color/outline"
+        app:endIconMode="none"
+        app:startIconDrawable="@drawable/ic_clear_text"
+        app:startIconContentDescription="@string/cd_clear_url"
+        app:startIconTint="@color/colorPrimary"
+        app:hintTextColor="@color/colorOnSurface"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/urlInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/url_hint"
+            android:inputType="textUri"
+            android:maxLines="1"
+            android:paddingEnd="144dp"
+            android:textColor="@color/colorOnSurface" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <LinearLayout
+        android:id="@+id/urlTrailingActions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="4dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        app:layout_constraintEnd_toEndOf="@id/urlInputLayout"
+        app:layout_constraintTop_toTopOf="@id/urlInputLayout"
+        app:layout_constraintBottom_toBottomOf="@id/urlInputLayout">
+
+        <ImageButton
+            android:id="@+id/urlRefreshButton"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/url_refresh"
+            android:padding="8dp"
+            android:src="@drawable/ic_refresh"
+            android:tint="@color/colorPrimary" />
+
+        <ImageButton
+            android:id="@+id/urlBatchButton"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/batch_button"
+            android:padding="8dp"
+            android:src="@drawable/ic_batch"
+            android:tint="@color/colorPrimary" />
+
+        <ImageButton
+            android:id="@+id/localBatchButton"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/local_batch_button"
+            android:padding="8dp"
+            android:src="@drawable/ic_batch"
+            android:tint="@color/colorPrimary"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/actionRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:baselineAligned="false"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@id/urlInputLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/modeButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="@string/mode_web"
+            android:textAllCaps="false"
+            android:textColor="@color/colorOnSurface"
+            app:icon="@drawable/ic_globe"
+            app:iconPadding="8dp"
+            app:iconTint="@color/colorPrimary"
+            app:iconGravity="textStart" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/optionsButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/options_button"
+            android:textAllCaps="false"
+            android:textColor="@color/colorOnSurface"
+            app:icon="@drawable/ic_options"
+            app:iconPadding="8dp"
+            app:iconTint="@color/colorPrimary"
+            app:iconGravity="textStart" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/applyButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/apply_button"
+            android:textAllCaps="false"
+            android:textColor="@color/colorOnPrimary"
+            app:iconPadding="8dp"
+            app:iconTint="@color/colorOnPrimary"
+            app:backgroundTint="@color/colorPrimary"
+            app:icon="@drawable/ic_apply"
+            app:iconGravity="textStart" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/previewContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/preview_background"
+        android:clipToPadding="false"
+        android:clipToOutline="true"
+        app:layout_constraintTop_toBottomOf="@id/actionRow"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextureView
+            android:id="@+id/localVideoSurface"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <TextureView
+            android:id="@+id/remoteVideoSurfacePrimary"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <TextureView
+            android:id="@+id/remoteVideoSurfaceSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <com.example.bizhi.vr.VrVideoSurfaceView
+            android:id="@+id/vrPreviewSurface"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible"
+            android:alpha="0" />
+
+        <WebView
+            android:id="@+id/previewWebView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never" />
+
+        <ProgressBar
+            android:id="@+id/previewProgress"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/colorPrimary"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/previewStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/preview_status_background"
+            android:padding="12dp"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="14sp"
+            android:visibility="gone"
+            tools:text="加载失败，轻触重试" />
+
+        <TextView
+            android:id="@+id/vrPreviewHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="12dp"
+            android:background="@drawable/preview_status_background"
+            android:padding="8dp"
+            android:text="@string/vr_preview_hint"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/vrPreviewTouchBlocker"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

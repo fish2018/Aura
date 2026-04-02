@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#3E352D</color>
+    <color name="colorPrimaryVariant">#2B241E</color>
+    <color name="colorAccent">#B68A5E</color>
+    <color name="colorOnPrimary">#FFFDFC</color>
+    <color name="colorSurface">#F6F3EE</color>
+    <color name="colorOnSurface">#161310</color>
+    <color name="colorSurfaceAlt">#FFFCF8</color>
+    <color name="previewSurface">#FFFDFC</color>
+    <color name="previewSurfaceTop">#FFFDFC</color>
+    <color name="previewSurfaceBottom">#ECE6DE</color>
+    <color name="previewStroke">#D7CFC5</color>
+    <color name="surfaceVariant">#EAE3DA</color>
+    <color name="outline">#C9BFB3</color>
+    <color name="chipBackground">#E1D8CD</color>
+    <color name="statusBackground">#F2ECE5</color>
+    <color name="statusBackgroundStroke">#D3C9BD</color>
+    <color name="webviewBackground">#FFFCF8</color>
+    <color name="segmentedButtonRipple">#1F3E352D</color>
+    <color name="purple_200">#D8C8B7</color>
+    <color name="purple_500">#8A7560</color>
+    <color name="purple_700">#5A4A3C</color>
+    <color name="teal_200">#DDC7AD</color>
+    <color name="teal_700">#A27E59</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

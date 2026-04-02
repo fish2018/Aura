@@ -1,0 +1,21 @@
+<resources>
+    <style name="Theme.Aura" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorSecondary">@color/colorAccent</item>
+        <item name="materialButtonStyle">@style/Widget.Aura.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/Widget.Aura.Button.Outlined</item>
+        <item name="textInputStyle">@style/Widget.Aura.TextInputLayout</item>
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Aura.SmallComponent</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Aura.MediumComponent</item>
+        <item name="android:windowBackground">@color/colorSurface</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+        <item name="android:navigationBarColor">@color/colorSurface</item>
+        <item name="android:statusBarColor">@color/colorSurface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:colorBackground">@color/colorSurface</item>
+        <item name="android:colorAccent">@color/colorAccent</item>
+    </style>
+</resources>

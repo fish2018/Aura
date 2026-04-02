@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wallpaperRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/webviewBackground">
+
+    <TextureView
+        android:id="@+id/wallpaperRemoteVideoPrimary"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <TextureView
+        android:id="@+id/wallpaperRemoteVideoSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <com.example.bizhi.vr.VrVideoSurfaceView
+        android:id="@+id/wallpaperVideoSurface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="visible"
+        android:alpha="1" />
+
+    <FrameLayout
+        android:id="@+id/wallpaperWebViewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</FrameLayout>

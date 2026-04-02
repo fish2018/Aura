@@ -1,0 +1,74 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Aura" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorSecondary">@color/colorAccent</item>
+        <item name="materialButtonStyle">@style/Widget.Aura.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/Widget.Aura.Button.Outlined</item>
+        <item name="textInputStyle">@style/Widget.Aura.TextInputLayout</item>
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Aura.SmallComponent</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Aura.MediumComponent</item>
+        <item name="android:windowBackground">@color/colorSurface</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+        <item name="android:navigationBarColor">@color/colorSurface</item>
+        <item name="android:statusBarColor">@color/colorSurface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorBackground">@color/colorSurface</item>
+        <item name="android:colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="ShapeAppearance.Aura.SmallComponent" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">18dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Aura.MediumComponent" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">22dp</item>
+    </style>
+
+    <style name="ShapeAppearanceOverlay.Aura.TextInput" parent="">
+        <item name="cornerSizeTopLeft">0dp</item>
+        <item name="cornerSizeTopRight">0dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="Widget.Aura.TextInputLayout" parent="Widget.Material3.TextInputLayout.FilledBox">
+        <item name="boxBackgroundColor">@color/surfaceVariant</item>
+        <item name="boxStrokeColor">@color/outline</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.Aura.TextInput</item>
+    </style>
+
+    <style name="Widget.Aura.Button" parent="Widget.Material3.Button">
+        <item name="shapeAppearance">@style/ShapeAppearance.Aura.SmallComponent</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+    <style name="Widget.Aura.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="shapeAppearance">@style/ShapeAppearance.Aura.SmallComponent</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:elevation">0dp</item>
+        <item name="strokeColor">@color/outline</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="backgroundTint">@color/colorSurfaceAlt</item>
+    </style>
+
+    <style name="Widget.Aura.Button.Segmented" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="shapeAppearance">@style/ShapeAppearance.Aura.SmallComponent</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:minHeight">46dp</item>
+        <item name="android:textColor">@color/segmented_button_text</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/segmented_button_stroke</item>
+        <item name="backgroundTint">@color/segmented_button_background</item>
+        <item name="rippleColor">@color/segmented_button_ripple</item>
+    </style>
+</resources>
