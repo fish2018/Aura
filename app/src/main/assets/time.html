@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地支时钟</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg:#F4EDE0; --gold:#8B6914; --gold-l:#C9A96E; --gold-p:#DFC78A;
+  --ink:#2C2418; --ink-l:#5C4E3C; --ink-d:#8A7D6B; --ivory:#FFFDF5;
+}
+body { background:var(--bg); min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei','Heiti SC',sans-serif; overflow:hidden; }
+body::before { content:''; position:fixed; inset:0; background:url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E"); pointer-events:none; }
+.clock-wrap { width:min(94vmin,680px); height:min(94vmin,680px); }
+.clock-svg { width:100%; height:100%; filter:drop-shadow(0 4px 30px rgba(139,105,20,.08)); }
+
+/* Debug panel - top right */
+.dbg-panel { position:fixed; top:12px; right:12px; z-index:100; display:flex; align-items:center; gap:6px; opacity:.6; transition:opacity .3s; }
+.dbg-panel:hover { opacity:1; }
+.dbg-toggle { width:18px; height:18px; border:1.5px solid var(--gold-l); border-radius:4px; background:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:10px; line-height:1; transition:all .2s; }
+.dbg-toggle.active { background:var(--gold); color:var(--ivory); }
+.dbg-inputs { display:none; align-items:center; gap:2px; }
+.dbg-inputs.show { display:flex; }
+.dbg-inputs input { width:32px; height:22px; border:1px solid var(--gold-l); border-radius:4px; background:rgba(255,253,245,.9); color:var(--ink); font-size:11px; text-align:center; font-family:inherit; outline:none; -moz-appearance:textfield; }
+.dbg-inputs input::-webkit-inner-spin-button,.dbg-inputs input::-webkit-outer-spin-button { -webkit-appearance:none; }
+.dbg-inputs span { color:var(--ink-d); font-size:11px; }
+@media(max-width:480px){ .dbg-panel{top:8px;right:8px} }
+
+/* Info bar below clock */
+.info-bar { text-align:center; margin-top:10px; font-size:13px; color:var(--ink-l); letter-spacing:.3px; line-height:1.6; opacity:.85; }
+.info-bar .jie { color:#C62828; font-weight:700; }
+.info-bar .qi { color:#2E7D32; }
+.info-bar .dot { color:var(--gold-l); margin:0 6px; font-size:8px; vertical-align:middle; }
+.info-bar .label { color:var(--ink-d); font-size:10px; margin-left:1px; }
+.info-bar .val { font-weight:600; }
+.info-bar .time-line { font-size:12.5px; margin-top:2px; }
+.info-bar .shichen { font-size:14px; font-weight:700; color:var(--ink); }
+.info-bar .geng { color:#6A5ACD; font-size:14px; font-weight:700; }
+.info-bar .ke { color:var(--ink-l); }
+.info-bar .dn { font-size:11px; color:var(--gold); background:rgba(139,105,20,.08); padding:1px 6px; border-radius:3px; margin-right:4px; }
+.info-bar .clock-time { color:var(--ink-d); font-size:11.5px; font-variant-numeric:tabular-nums; }
+@media(max-width:480px){ .info-bar{font-size:11px;} .info-bar .label{font-size:9px;} .info-bar .shichen,.info-bar .geng{font-size:12px;} }
+
+/* Help modal */
+.help-overlay { position:fixed; inset:0; background:rgba(44,36,24,.45); z-index:200; display:none; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
+.help-overlay.show { display:flex; }
+.help-modal { background:var(--ivory); border:1.5px solid var(--gold-l); border-radius:10px; max-width:520px; width:92vw; max-height:82vh; overflow-y:auto; padding:28px 26px 22px; box-shadow:0 8px 40px rgba(139,105,20,.15); position:relative; }
+.help-modal::-webkit-scrollbar { width:4px; }
+.help-modal::-webkit-scrollbar-thumb { background:var(--gold-l); border-radius:2px; }
+.help-close { position:absolute; top:12px; right:14px; background:none; border:none; font-size:18px; color:var(--ink-d); cursor:pointer; line-height:1; padding:2px; }
+.help-close:hover { color:var(--ink); }
+.help-modal h2 { font-size:16px; color:var(--ink); margin-bottom:16px; font-weight:700; letter-spacing:.5px; border-bottom:1px solid rgba(139,105,20,.15); padding-bottom:10px; }
+.help-modal h3 { font-size:13.5px; color:var(--gold); margin:14px 0 6px; font-weight:700; }
+.help-modal h3:first-of-type { margin-top:0; }
+.help-modal p, .help-modal li { font-size:12.5px; color:var(--ink-l); line-height:1.75; }
+.help-modal ul { padding-left:18px; margin:4px 0 8px; }
+.help-modal li { margin-bottom:2px; }
+.help-modal .hl { color:#C62828; font-weight:600; }
+.help-modal .hl2 { color:#2E7D32; font-weight:600; }
+.help-modal .hl3 { color:#6A5ACD; font-weight:600; }
+.help-modal .note { font-size:11.5px; color:var(--ink-d); background:rgba(139,105,20,.04); border-radius:6px; padding:8px 12px; margin-top:12px; line-height:1.7; border-left:3px solid var(--gold-l); }
+.help-modal table { width:100%; border-collapse:collapse; margin:6px 0 10px; font-size:12px; }
+.help-modal th { background:rgba(139,105,20,.06); font-weight:600; color:var(--ink); text-align:left; padding:5px 8px; border-bottom:1px solid rgba(139,105,20,.12); }
+.help-modal td { padding:4px 8px; border-bottom:1px solid rgba(139,105,20,.06); color:var(--ink-l); }
+.help-modal td:first-child { font-weight:600; color:var(--ink); white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="clock-wrap">
+  <svg class="clock-svg" viewBox="0 0 500 500" id="clock">
+    <defs>
+      <radialGradient id="fg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#FFFDF5"/><stop offset="65%" stop-color="#FAF6ED"/><stop offset="100%" stop-color="#EDE5D5"/></radialGradient>
+      <radialGradient id="fgNight" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#E8E4F0"/><stop offset="65%" stop-color="#D8D4E8"/><stop offset="100%" stop-color="#C0BCCE"/></radialGradient>
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#C9A96E"/><stop offset="30%" stop-color="#8B6914"/><stop offset="50%" stop-color="#DFC78A"/><stop offset="70%" stop-color="#8B6914"/><stop offset="100%" stop-color="#C9A96E"/></linearGradient>
+      <clipPath id="innerClip"><circle cx="250" cy="250" r="113"/></clipPath>
+    </defs>
+    <circle cx="250" cy="250" r="248" fill="none" stroke="#C9A96E" stroke-width="5" opacity=".2"/>
+    <circle cx="250" cy="250" r="244" fill="none" stroke="#8B6914" stroke-width="2" opacity=".4"/>
+    <circle cx="250" cy="250" r="240" fill="url(#fg)" id="faceFill"/>
+    <circle cx="250" cy="250" r="240" fill="none" stroke="url(#bg)" stroke-width="3"/>
+    <circle cx="250" cy="250" r="240" fill="rgba(25,25,60,0.12)" id="nightOverlay" opacity="0"/>
+    <circle cx="250" cy="250" r="215" fill="none" stroke="#C9A96E" stroke-width=".5" opacity=".15"/>
+    <circle cx="250" cy="250" r="155" fill="none" stroke="#C9A96E" stroke-width=".5" opacity=".12"/>
+    <circle cx="250" cy="250" r="120" fill="none" stroke="#C9A96E" stroke-width=".5" opacity=".1"/>
+    <!-- 祥云纹装饰 -->
+    <g id="cloudPattern" clip-path="url(#innerClip)" opacity=".18">
+      <!-- 大祥云 - 上方 -->
+      <path d="M222,218c-1-2.1-4.6-2.2-6-1.8-.8-3.5-4.4-5-8.3-4.6-2.1-3.6-9.2-6.2-14.5.3-1.7 2.2-3.1 2.5-5.5 3.7-3.7 1.9-6 6.3-4.2 8.8 2.2 3.2 6.2 3 9 1.3 1.8 1.2 2 3.2-.3 4.6-3.8 2.3-8.3 1.2-13.6.2-6.9-1.4-10.1 1.1-14 5-1.6 1.6-3 2.1-4.4 2.4l.3.6c4 .2 6-2.2 9.3-3.1 4.2-1.3 7.7.3 11.8 1.6 6.1 2.1 16.1 1.8 21.4-2.8 2-1.8 2.9-3.9 3.3-6 2.4 1.8 7.2-.3 9.1-3.1 3.2 1 6.9-.8 8-3.6.6-1.8 0-2.5-1.3-3.4z" fill="#CF9F5D" opacity=".15"/>
+      <!-- 大祥云 - 右上 -->
+      <path d="M288,210c2.2-1.3 3.4-4.9 1.5-7.6-2.5-3.5-5.4-3.4-7.1-3.2-1.3-3.5-4-4.2-5.6-4.2-4-2.9-10.7-2.6-15.2 3.1-4.4-2.8-11.5-2-14.4 4.1-5.1 1.2-5.9 7.2-4 10.3 1 1.7 2.6 2.6 3 2.7.6 4.5 4.9 6 9.6 5.2 4.1-.7 6 .3 6 2.6 0 2.3-2.7 3.4-6.6 1.5-4-1.9-7-2.6-11 .8-4 3.4-7.3 3.8-10.2.3s-5.6-4-9-3.2l-.4.8c3.5-.3 4.7 1.3 6.7 4.4s5.3 5.9 11.5 4.7c3.8-.7 4.5-3.1 8.9-1.2 4.4 1.9 6.6 2.6 11.3.9 6.6 2.5 13.6 2 18.8-5.6 4.9 2.2 11.8 0 13.2-5.7 1.2-4.6-1.9-9.8-7.2-10.8z" fill="#CF9F5D" opacity=".15"/>
+      <!-- 大祥云 - 下方 -->
+      <path d="M218,295c-4.5 2.1-10.3 2.8-16.1 1.8-5.6-1-7.5-6.1-5.1-8.2 1.3-1.1 2.8-.9 3.5.9 1 2.5 4.6 1.1 5-2.3.5-3.2-1.8-5.7-4.4-6.4 1.6-3.6.2-8.2-4.9-8.6-2-4.2-6.2-6.4-11.6-5.5-4.6.8-6.9 4.2-7.6 7.5-5.1.7-7.8 5.1-6.6 9.9-5.7 1.2-7.4 4.4-6.9 7.1.4 2 1.8 2.9 3.1 3.1 1.3 3.3 5.1 5 8.5 4.2 4.1-.9 5-3.2 4.6-4.9-.5-2-3-2.1-4.6-.4l-.8-.7c1.7-2.9 6.3-2.9 8.8.2 4.3 5.4 9 8.4 18.8 8.4 7.7 0 12.8-2.9 16.1-6.2z" fill="#F9F2DF" stroke="#D6C4A8" stroke-miterlimit="10" stroke-width=".4"/>
+      <!-- 大祥云 - 右下 -->
+      <path d="M285,280c-2 1.6-5 1.2-8.2-.8-4.2-2.6-8.4-3-13.4.2-2.9 1.9-5.2.2-5-1.7.2-1.7 2.3-2.1.4-6.3-1-2-3.5-2.7-5.5-3-2.3-3.7-6.7-5.7-12.4-5.4-5 .3-8 3.4-9.2 6.4-4.5.6-6 4.8-4.8 7.9 1.5 3.9 6.2 4.2 8.9 2.4 1.9-1.3 2.4-3.6.9-4.9-1.5-1.5-3.6-.5-4.1.9l-.5-.4c.5-2.7 3.6-3.2 5.3-1.9 2.2 1.7 1.7 4.8.3 6.1 2.6-1 5.3-.8 7.7 1.4 1.7 1.5 3.7 1.5 5.9 0 1.7-1.1 3.3-1.4 4.1-.6l-.3.8c-2.1-.8-4 .6-4 2.8 0 3 3 5.7 7.2 4.7 4.5-1.1 6.4-6.1 12.4-7.1 3.1-.6 4 .9 7.9 1 3.6.1 5.5-1.1 6.8-2.6l-.5 0z" fill="#F9F2DF" stroke="#D6C4A8" stroke-miterlimit="10" stroke-width=".4"/>
+      <!-- 小祥云 - 左 -->
+      <path d="M175,255c-2-0.8-2.6-0.6-3.3-1.8-2.2-2.3-8.7-2.3-10.8 1.5-4.2-1.2-8.1.3-8.9 2.9-4.8 0-6.6 4.5-5.6 7.2 1.3 3.8 5.5 4.4 8.9 2.9l1 1c-2.6 2.4-8.6 2.7-13.9-.6-4.2-2.7-6.6-6-11.5-5.2-2.2.3-3.9 1.2-4.8 2.2l.3.5c4-1.6 7-.5 9.9 3.3 4.1 5.5 8 8 15.5 7.6 9.6-.6 14.8-5.5 16.5-12 4 1.9 7.9-.8 8.6-4.2.5-2.4-.5-4.6-1.8-5.4z" fill="#CF9F5D" opacity=".15"/>
+      <!-- 小祥云 - 右中 -->
+      <path d="M310,248c-1.3-4.3-5.4-5.9-10.2-5.9s-8 2-9.7 5.5c-3.8-.2-7.8 2.7-7.8 6.8 0 2.5 1.3 4.1 2.5 5.2-1.7 1.1-4.1.5-6.8-1.4s-7.7-2.3-11.1 0c-3.4 2.3-5.3 3.5-10 2l-.3.9c3 2.9 6 3 10.7 1.9s7.5 1.8 10.4 4.6c2.9 2.8 7.9 4.8 12.5 2.1 1.8 4.4 6.5 6.4 10.9 6 5.6-.5 9-3.8 11.4-6.4l.5-.6-1.1-.8c1-2.1.6-5.9-4-7.2 4.6 1 7.6-2.7 7.6-5.9s-2-6.2-5.6-6.8z" fill="#CF9F5D" opacity=".15"/>
+      <!-- 小祥云碎片 -->
+      <path d="M250,178c-4.5 0-7.4 3-7.4 5.5-2.7-.5-4.3.4-6.4 2-1.7 1.3-5.5 1.2-8.4.7l-.4.8c2.2 2.2 5.5 2.7 8.9 1.4 2.6-1.1 4.7-.5 7 1 2.7 1.7 5.2 1.4 8 1.1 4.7-.5 7.1-2.6 6.8-5.7-.4-3.3-3.9-6.8-8-6.8z" fill="#CF9F5D" opacity=".12"/>
+      <path d="M250,312c-2.3 1.2-2.3 4.1-.6 5.9l.4-.2c-.5-2.3 1.5-4.2 4.3-4.1 2 .1 3.1 1.3 4.2 2.7l.8-.4c-.4-2.4-3-5.6-9-4.1z" fill="#CF9F5D" opacity=".12"/>
+      <path d="M206,192l-1 .7c-.7 1.5-.3 4 2.3 4.2 1.4.1 2.4-.3 3.2-.8-.1 1.5 1.1 3.1 3.6 3.6 1.9.4 3.4.2 4-1 .5-1.1-.6-3.3-3.6-3.6-1.8-.2-3.4.5-4.5 1-.3-1.7-1.6-3-4-4.1z" fill="#CF9F5D" opacity=".12"/>
+      <path d="M290,300l-1 .7c-.7 1.5-.3 4 2.3 4.2 1.4.1 2.4-.3 3.2-.8-.1 1.5 1.1 3.1 3.6 3.6 1.9.4 3.4.2 4-1 .5-1.1-.6-3.3-3.6-3.6-1.8-.2-3.4.5-4.5 1-.3-1.7-1.6-3-4-4.1z" fill="#CF9F5D" opacity=".12"/>
+    </g>
+    <g id="dial"></g>
+    <g id="minRing"></g>
+    <g id="hands"></g>
+    <circle cx="250" cy="250" r="9" fill="#8B6914"/><circle cx="250" cy="250" r="5.5" fill="#B83A2A"/><circle cx="250" cy="250" r="2" fill="#DFC78A"/>
+  </svg>
+</div>
+<div class="info-bar" id="infoBar"></div>
+<div class="dbg-panel">
+  <button class="dbg-toggle" id="helpToggle" title="帮助">?</button>
+  <button class="dbg-toggle" id="dbgToggle" title="调试">&#9881;</button>
+  <div class="dbg-inputs" id="dbgInputs">
+    <input type="number" id="dbgH" min="0" max="23" value="12">
+    <span>:</span>
+    <input type="number" id="dbgM" min="0" max="59" value="0">
+  </div>
+</div>
+
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-modal">
+    <button class="help-close" id="helpClose">&times;</button>
+    <h2>地支时钟说明</h2>
+
+    <h3>干支纪年</h3>
+    <p>以天干（甲乙丙丁戊己庚辛壬癸）配地支（子丑寅卯辰巳午未申酉戌亥），六十年一轮回，称"六十甲子"。<b>以立春为岁首</b>，立春前仍属上一年。</p>
+
+    <h3>地支纪月</h3>
+    <p>一年十二月对应十二地支。正月为<b>寅月</b>，依次排列至十二月丑月。月份以<span class="hl">节令</span>为界切换，非农历初一。</p>
+
+    <h3>二十四节气</h3>
+    <p>节气分为两类，交替排列，约每15天一个：</p>
+    <ul>
+      <li><span class="hl">节令</span>（12个）— 月之始，标红。立春、惊蛰、清明、立夏、芒种、小暑、立秋、白露、寒露、立冬、大雪、小寒。</li>
+      <li><span class="hl2">中气</span>（12个）— 月之中，标绿。雨水、春分、谷雨、小满、夏至、大暑、处暑、秋分、霜降、小雪、冬至、大寒。</li>
+    </ul>
+
+    <h3>十二时辰</h3>
+    <p>一日分十二时辰，每时辰合今2小时。表盘以地支标示：</p>
+    <table>
+      <tr><th>时辰</th><th>时段</th><th>五行</th><th>时辰</th><th>时段</th><th>五行</th></tr>
+      <tr><td>子</td><td>23-01</td><td>水</td><td>午</td><td>11-13</td><td>火</td></tr>
+      <tr><td>丑</td><td>01-03</td><td>土</td><td>未</td><td>13-15</td><td>土</td></tr>
+      <tr><td>寅</td><td>03-05</td><td>木</td><td>申</td><td>15-17</td><td>金</td></tr>
+      <tr><td>卯</td><td>05-07</td><td>木</td><td>酉</td><td>17-19</td><td>金</td></tr>
+      <tr><td>辰</td><td>07-09</td><td>土</td><td>戌</td><td>19-21</td><td>土</td></tr>
+      <tr><td>巳</td><td>09-11</td><td>火</td><td>亥</td><td>21-23</td><td>水</td></tr>
+    </table>
+
+    <h3>昼夜与表盘轮转</h3>
+    <p>以卯时（05:00）入昼、酉时（17:00）入夜为界。白昼午时居顶，夜间子时居顶，切换时表盘旋转180°。</p>
+
+    <h3>初/正与刻</h3>
+    <p>每时辰分<b>初</b>（前一小时）、<b>正</b>（后一小时），各含四刻：</p>
+    <ul>
+      <li><b>初刻</b> — 该半时辰 00-14 分</li>
+      <li><b>一刻</b> — 该半时辰 15-29 分</li>
+      <li><b>二刻</b> — 该半时辰 30-44 分</li>
+      <li><b>三刻</b> — 该半时辰 45-59 分</li>
+    </ul>
+    <p>例：11:45 为<b>午初三刻</b>，12:45 为<b>午正三刻</b>（古代"午时三刻"斩首即此时）。</p>
+
+    <h3>五更与点（夜间）</h3>
+    <p>夜间（19:00-05:00）行<span class="hl3">更点制</span>，用于打更报时：</p>
+    <table>
+      <tr><th>更次</th><th>时段</th><th>对应地支</th></tr>
+      <tr><td>一更</td><td>19:00-21:00</td><td>戌</td></tr>
+      <tr><td>二更</td><td>21:00-23:00</td><td>亥</td></tr>
+      <tr><td>三更</td><td>23:00-01:00</td><td>子（半夜三更）</td></tr>
+      <tr><td>四更</td><td>01:00-03:00</td><td>丑</td></tr>
+      <tr><td>五更</td><td>03:00-05:00</td><td>寅</td></tr>
+    </table>
+    <p>每更分<b>五点</b>，每点约24分钟。如"三更二点"约为23:48。</p>
+
+    <h3>五行配色</h3>
+    <p>当前时辰以对应五行色高亮：
+      <span style="color:#FF0000;font-weight:700">火</span>（巳午）、
+      <span style="color:#0088FF;font-weight:700">水</span>（子亥）、
+      <span style="color:#00CC00;font-weight:700">木</span>（寅卯）、
+      <span style="color:#FFAA00;font-weight:700">土</span>（丑辰未戌）、
+      <span style="color:#FFD700;font-weight:700">金</span>（申酉）。
+    </p>
+
+    <div class="note">
+      本时钟干支年以立春为界、干支月以节令为界，节气日期为近似值（实际每年略有浮动）。更点制仅用于夜间（19:00-05:00），非更时段夜间仍显示时辰+刻。
+    </div>
+  </div>
+</div>
+<script>
+// 五行 colors — maximum saturation
+const WX={火:'#FF0000',水:'#0088FF',木:'#00CC00',土:'#FFAA00',金:'#FFD700'};
+const B=[
+  {c:'子',h:0, jq:['大雪','冬至'],wx:'水'},
+  {c:'丑',h:2, jq:['小寒','大寒'],wx:'土'},
+  {c:'寅',h:4, jq:['立春','雨水'],wx:'木'},
+  {c:'卯',h:6, jq:['惊蛰','春分'],wx:'木'},
+  {c:'辰',h:8, jq:['清明','谷雨'],wx:'土'},
+  {c:'巳',h:10,jq:['立夏','小满'],wx:'火'},
+  {c:'午',h:12,jq:['芒种','夏至'],wx:'火'},
+  {c:'未',h:14,jq:['小暑','大暑'],wx:'土'},
+  {c:'申',h:16,jq:['立秋','处暑'],wx:'金'},
+  {c:'酉',h:18,jq:['白露','秋分'],wx:'金'},
+  {c:'戌',h:20,jq:['寒露','霜降'],wx:'土'},
+  {c:'亥',h:22,jq:['立冬','小雪'],wx:'水'}
+];
+const C=250, FONT="'Noto Sans SC','PingFang SC','Microsoft YaHei','Heiti SC',sans-serif";
+let manual=false, manH=12, manM=0, dialDeg=0, wasDay=null;
+// Animation state for dial rotation
+let animating=false, animFrom=0, animTo=0, animStart=0;
+const ANIM_DUR=1500; // ms
+
+function pol(r,a){ const d=(a-90)*Math.PI/180; return [C+r*Math.cos(d),C+r*Math.sin(d)]; }
+function sv(tag,at,par){
+  const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const[k,v]of Object.entries(at))e.setAttribute(k,v);
+  par.appendChild(e); return e;
+}
+function brIdx(h){ return h>=23||h<1?0:Math.floor((h+1)/2); }
+function isDay(h,m){ const t=h*60+m; return t>=300&&t<1020; }
+
+// 天干地支
+const TG=['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const DZ=['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+// 地支月名
+const DZ_MON=['寅','卯','辰','巳','午','未','申','酉','戌','亥','子','丑'];
+
+// 节气数据：每个月两个节气，jq[0]=节令 jq[1]=中气
+// 按月份排列：1月(小寒,大寒) 2月(立春,雨水) ... 12月(大雪,冬至)
+const JQ_BY_MON=[
+  ['小寒','大寒'],['立春','雨水'],['惊蛰','春分'],
+  ['清明','谷雨'],['立夏','小满'],['芒种','夏至'],
+  ['小暑','大暑'],['立秋','处暑'],['白露','秋分'],
+  ['寒露','霜降'],['立冬','小雪'],['大雪','冬至']
+];
+
+// 近似节气日期（公历），用于判断当前节令/中气
+// 格式：[month, day] 24节气按顺序
+const JQ_DATES=[
+  [1,5],[1,20],[2,4],[2,19],[3,6],[3,21],
+  [4,5],[4,20],[5,6],[5,21],[6,6],[6,21],
+  [7,7],[7,23],[8,7],[8,23],[9,8],[9,23],
+  [10,8],[10,23],[11,7],[11,22],[12,7],[12,22]
+];
+const JQ_NAMES=[
+  '小寒','大寒','立春','雨水','惊蛰','春分',
+  '清明','谷雨','立夏','小满','芒种','夏至',
+  '小暑','大暑','立秋','处暑','白露','秋分',
+  '寒露','霜降','立冬','小雪','大雪','冬至'
+];
+// 节令(奇数索引0,2,4...)=节, 中气(偶数索引1,3,5...)=气
+function isJie(idx){ return idx%2===0; }
+
+function getCurrentJQ(mon,day){
+  // 找到当前所处的节气段
+  let cur=23; // default: 大雪之后 冬至之前 → 大雪
+  for(let i=0;i<24;i++){
+    const[m,d]=JQ_DATES[i];
+    if(mon<m||(mon===m&&day<d)){ cur=i===0?23:i-1; break; }
+    if(i===23) cur=23;
+  }
+  return cur;
+}
+
+// 干支年（简化：以立春为界）
+function gzYear(y,mon,day){
+  // 立春约2月4日，之前算上一年
+  if(mon<2||(mon===2&&day<4)) y--;
+  const tgIdx=(y-4)%10; // 甲=4
+  const dzIdx=(y-4)%12;
+  return TG[(tgIdx+10)%10]+DZ[(dzIdx+12)%12];
+}
+
+// 干支月（以节令为界，寅月=正月）
+function gzMonth(jqIdx){
+  // jqIdx: 当前节气索引(0-23)
+  // 每两个节气一个月：小寒大寒=丑月(0-1), 立春雨水=寅月(2-3), ...
+  const monIdx=Math.floor(jqIdx/2); // 0=丑月序, 1=寅月序...
+  // 地支：丑(0), 寅(1), 卯(2)... 子(11)
+  const dzMonNames=['丑','寅','卯','辰','巳','午','未','申','酉','戌','亥','子'];
+  return dzMonNames[monIdx]+'月';
+}
+
+function updateInfoBar(h,m,s){
+  const now=manual?new Date():new Date();
+  const y=now.getFullYear(), mon=now.getMonth()+1, day=now.getDate();
+  const displayH=manual?h:now.getHours();
+  const displayM=manual?m:now.getMinutes();
+  const displayS=manual?s:now.getSeconds();
+
+  const bi=brIdx(displayH);
+  const shiChen=B[bi].c+'时';
+  const isDayNow=isDay(displayH,displayM);
+  const gzy=gzYear(y,mon,day);
+  const jqIdx=getCurrentJQ(mon,day);
+  const jqName=JQ_NAMES[jqIdx];
+  const jqType=isJie(jqIdx)?'节令':'中气';
+  const jqClass=isJie(jqIdx)?'jie':'qi';
+  const gzm=gzMonth(jqIdx);
+  const timeStr=String(displayH).padStart(2,'0')+':'+String(displayM).padStart(2,'0')+':'+String(displayS).padStart(2,'0');
+
+  // 刻：初/正各四刻（初初刻、初一刻、初二刻、初三刻、正初刻、正一刻、正二刻、正三刻）
+  // 前1小时=初，后1小时=正，每刻15分钟
+  const keLabels=['初刻','一刻','二刻','三刻'];
+  const scStartH=(B[bi].h-1+24)%24;
+  let minInSC=((displayH-scStartH+24)%24)*60+displayM;
+  if(minInSC>=120) minInSC-=120;
+  const isZheng=minInSC>=60; // 正(后半时辰)
+  const minInHalf=isZheng?(minInSC-60):minInSC;
+  const keIdx=Math.min(Math.floor(minInHalf/15),3);
+  const keStr=B[bi].c+(isZheng?'正':'初')+keLabels[keIdx];
+
+  // 更/点：夜间（戌时19:00 - 寅时05:00）
+  const gengNames=['一更','二更','三更','四更','五更'];
+  const dianNames=['一点','二点','三点','四点','五点'];
+  let gengDianStr='';
+  const t24=displayH*60+displayM;
+  if(t24>=1140||t24<300){
+    let offMin=t24>=1140?(t24-1140):(t24+1440-1140);
+    const gIdx=Math.min(Math.floor(offMin/120),4);
+    const minInGeng=offMin-gIdx*120;
+    const dIdx=Math.min(Math.floor(minInGeng/24),4);
+    gengDianStr=gengNames[gIdx]+dianNames[dIdx];
+  }
+
+  // 时间部分：昼用 时辰+刻，夜用 更+点
+  let timePart;
+  if(isDayNow){
+    timePart='<span class="dn">昼</span>'+
+      '<span class="shichen">'+keStr+'</span>';
+  } else {
+    if(gengDianStr){
+      timePart='<span class="dn">夜</span>'+
+        '<span class="geng">'+gengDianStr+'</span>';
+    } else {
+      timePart='<span class="dn">夜</span>'+
+        '<span class="shichen">'+keStr+'</span>';
+    }
+  }
+
+  const html=
+    '<span class="val">'+gzy+'年</span>'+
+    '<span class="dot">&middot;</span>'+
+    '<span class="val">'+gzm+'</span>'+
+    '<span class="dot">&middot;</span>'+
+    '<span class="'+jqClass+' val">'+jqName+'</span>'+
+    '<span class="label">('+jqType+')</span>'+
+    '<span class="dot">&middot;</span>'+
+    timePart+
+    '<span class="dot">&middot;</span>'+
+    '<span class="clock-time">'+timeStr+'</span>';
+
+  document.getElementById('infoBar').innerHTML=html;
+}
+
+function build(){
+  const dial=document.getElementById('dial');
+  const hands=document.getElementById('hands');
+
+  // 五更 arcs (night watch markers) — created first so they sit at bottom layer
+  // 一更=戌(idx=10), 二更=亥(idx=11), 三更=子(idx=0), 四更=丑(idx=1), 五更=寅(idx=2)
+  const gengIndices=[10,11,0,1,2];
+  for(let g=0;g<5;g++){
+    const gi=gengIndices[g];
+    const a1=gi*30-15, a2=gi*30+15;
+    const outer=238, inner=216;
+    const p1o=pol(outer,a1), p1i=pol(inner,a1);
+    const p2o=pol(outer,a2), p2i=pol(inner,a2);
+    const d='M'+p1i[0]+' '+p1i[1]+
+      'A'+inner+' '+inner+' 0 0 1 '+p2i[0]+' '+p2i[1]+
+      'L'+p2o[0]+' '+p2o[1]+
+      'A'+outer+' '+outer+' 0 0 0 '+p1o[0]+' '+p1o[1]+'Z';
+    sv('path',{d:d,fill:'#2A2A5C',opacity:0,'data-geng':g,class:'geng-arc'},dial);
+  }
+
+  // Outer ticks
+  for(let i=0;i<12;i++){
+    const ba=i*30;
+    let p1=pol(226,ba),p2=pol(236,ba);
+    sv('line',{x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],stroke:'#8B6914','stroke-width':1.5,'stroke-linecap':'round',opacity:.35},dial);
+    p1=pol(214,ba+15);p2=pol(236,ba+15);
+    sv('line',{x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],stroke:'#8B6914','stroke-width':2.5,'stroke-linecap':'round',opacity:.6},dial);
+  }
+
+  // 24 hour labels — all at r=205
+  for(let h=0;h<24;h++){
+    const ang=h*15;
+    const p=pol(205,ang);
+    sv('text',{x:p[0],y:p[1],'text-anchor':'middle','dominant-baseline':'central','font-family':FONT,'font-size':9,'font-weight':600,fill:'#5C4E3C',opacity:.9},dial).textContent=String(h).padStart(2,'0');
+  }
+
+  // Branch chars, 节气, separators
+  B.forEach((b,i)=>{
+    const a=i*30;
+    // 地支 character
+    const p=pol(178,a);
+    sv('text',{x:p[0],y:p[1],'text-anchor':'middle','dominant-baseline':'central','font-family':FONT,'font-size':27,'font-weight':900,fill:'#2C2418','data-i':i,'data-wx':b.wx},dial).textContent=b.c;
+    // 节气: jq[0]=节令(节,重点标记), jq[1]=中气(气)
+    const pj1=pol(148,a-5);
+    sv('text',{x:pj1[0],y:pj1[1],'text-anchor':'middle','dominant-baseline':'central','font-family':FONT,'font-size':8.5,'font-weight':700,fill:'#C62828',opacity:.8,'data-jq':'jie'},dial).textContent=b.jq[0];
+    const pj2=pol(148,a+5);
+    sv('text',{x:pj2[0],y:pj2[1],'text-anchor':'middle','dominant-baseline':'central','font-family':FONT,'font-size':8,fill:'#2E7D32',opacity:.55,'data-jq':'qi'},dial).textContent=b.jq[1];
+    // Separator
+    const bndA=a+15;
+    const s1=pol(160,bndA),s2=pol(195,bndA);
+    sv('line',{x1:s1[0],y1:s1[1],x2:s2[0],y2:s2[1],stroke:'#A67C2E','stroke-width':.4,opacity:.1},dial);
+  });
+
+  // Active arc
+  sv('path',{id:'activeArc',fill:'none',stroke:'#D4503F','stroke-width':4,opacity:.25,'stroke-linecap':'round',d:''},dial);
+
+  // Inner minute ring (fixed, not rotating)
+  const mr=document.getElementById('minRing');
+  sv('circle',{cx:C,cy:C,r:115,fill:'none',stroke:'#C9A96E','stroke-width':.4,opacity:.15},mr);
+  for(let i=0;i<60;i++){
+    const ang=i*6;
+    if(i%5===0){
+      const p1=pol(105,ang),p2=pol(118,ang);
+      sv('line',{x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],stroke:'#8B6914','stroke-width':1.3,'stroke-linecap':'round',opacity:.4},mr);
+    } else {
+      const p1=pol(110,ang),p2=pol(118,ang);
+      sv('line',{x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],stroke:'#C9A96E','stroke-width':.5,'stroke-linecap':'round',opacity:.2},mr);
+    }
+  }
+
+  // Hands
+  sv('polygon',{id:'hHour',points:'250,140 255,160 253,248 247,248 245,160',fill:'#2C2418'},hands);
+  sv('polygon',{id:'hMin',points:'250,108 253.5,138 252,248 248,248 246.5,138',fill:'#5C4E3C'},hands);
+  const sg=sv('g',{id:'hSec'},hands);
+  sv('line',{x1:250,y1:102,x2:250,y2:252,stroke:'#B83A2A','stroke-width':1.2,'stroke-linecap':'round'},sg);
+  sv('circle',{cx:250,cy:102,r:2.2,fill:'#B83A2A'},sg);
+  sv('line',{x1:250,y1:252,x2:250,y2:275,stroke:'#B83A2A','stroke-width':2,'stroke-linecap':'round',opacity:.6},sg);
+}
+
+function applyDialRotation(deg){
+  document.getElementById('dial').setAttribute('transform',`rotate(${deg},${C},${C})`);
+  document.querySelectorAll('#dial text').forEach(t=>{
+    const x=t.getAttribute('x'),y=t.getAttribute('y');
+    t.setAttribute('transform',`rotate(${-deg},${x},${y})`);
+  });
+}
+
+// Easing: ease-in-out cubic
+function easeInOut(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+function rotateDial(deg, animate){
+  if(deg===dialDeg && !animating) return;
+  if(animate){
+    animFrom=dialDeg;
+    animTo=deg;
+    animStart=performance.now();
+    animating=true;
+  } else {
+    animating=false;
+    dialDeg=deg;
+    applyDialRotation(deg);
+  }
+}
+
+function update(ts){
+  // Process dial rotation animation
+  if(animating){
+    const elapsed=ts-animStart;
+    const p=Math.min(elapsed/ANIM_DUR,1);
+    const ep=easeInOut(p);
+    dialDeg=animFrom+(animTo-animFrom)*ep;
+    applyDialRotation(dialDeg);
+    if(p>=1){ animating=false; dialDeg=animTo; }
+  }
+
+  let h,m,s,ms;
+  if(!manual){
+    const now=new Date(); h=now.getHours(); m=now.getMinutes(); s=now.getSeconds(); ms=now.getMilliseconds();
+  } else {
+    h=manH; m=manM; s=0; ms=0;
+  }
+
+  const day=isDay(h,m);
+  if(wasDay!==day){
+    const shouldAnimate = wasDay!==null;
+    wasDay=day;
+    rotateDial(day?180:0, shouldAnimate);
+  }
+
+  // Night effect: overlay + 更 arcs
+  const nightOv=document.getElementById('nightOverlay');
+  const t24Now=h*60+m;
+  const inGeng=t24Now>=1140||t24Now<300; // 19:00-05:00
+  nightOv.setAttribute('opacity', day?'0':'0.1');
+  // 更 arc highlights
+  let curGeng=-1;
+  if(inGeng){
+    let off=t24Now>=1140?(t24Now-1140):(t24Now+1440-1140);
+    curGeng=Math.min(Math.floor(off/120),4);
+  }
+  document.querySelectorAll('.geng-arc').forEach(el=>{
+    const gi=+el.getAttribute('data-geng');
+    if(!day && inGeng){
+      el.setAttribute('opacity','0.07');
+    } else if(!day){
+      el.setAttribute('opacity','0.05');
+    } else {
+      el.setAttribute('opacity','0');
+    }
+  });
+
+  const hourAng=(h+m/60+s/3600)*15+dialDeg;
+  const minAng=(m+s/60)*6;
+  const secAng=(s+ms/1000)*6;
+
+  document.getElementById('hHour').setAttribute('transform',`rotate(${hourAng},${C},${C})`);
+  document.getElementById('hMin').setAttribute('transform',`rotate(${minAng},${C},${C})`);
+  document.getElementById('hSec').setAttribute('transform',`rotate(${secAng},${C},${C})`);
+
+  // Active branch with 五行 color
+  const bi=brIdx(h);
+  const wxColor=WX[B[bi].wx];
+
+  // Update/create highlight circle behind active char
+  let hlight=document.getElementById('activeBg');
+  if(!hlight){
+    hlight=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    hlight.id='activeBg';
+    // Insert before text elements
+    const dial=document.getElementById('dial');
+    const firstText=dial.querySelector('text[data-i]');
+    if(firstText) dial.insertBefore(hlight,firstText);
+    else dial.appendChild(hlight);
+  }
+  const bgPos=pol(178,bi*30);
+  hlight.setAttribute('cx',bgPos[0]);
+  hlight.setAttribute('cy',bgPos[1]);
+  hlight.setAttribute('r','22');
+  hlight.setAttribute('fill',wxColor);
+  hlight.setAttribute('opacity','0.08');
+
+  document.querySelectorAll('#dial text[data-i]').forEach(t=>{
+    const i=+t.getAttribute('data-i');
+    const wxKey=t.getAttribute('data-wx');
+    if(i===bi){
+      const clr=WX[wxKey];
+      t.setAttribute('fill',clr);
+      t.setAttribute('font-size',34);
+      t.setAttribute('opacity','1');
+      t.setAttribute('stroke',clr);
+      t.setAttribute('stroke-width','0.8');
+      t.setAttribute('stroke-opacity','0.3');
+    } else {
+      t.setAttribute('fill','#2C2418');
+      t.setAttribute('font-size',27);
+      t.setAttribute('opacity','0.45');
+      t.setAttribute('stroke','none');
+      t.setAttribute('stroke-width','0');
+    }
+  });
+
+  const s1=pol(178,bi*30-15),s2=pol(178,bi*30+15);
+  const arc=document.getElementById('activeArc');
+  arc.setAttribute('d',`M${s1[0]} ${s1[1]}A178 178 0 0 1 ${s2[0]} ${s2[1]}`);
+  arc.setAttribute('stroke',wxColor);
+  arc.setAttribute('opacity','0.25');
+
+  // Update info bar
+  updateInfoBar(h,m,s);
+
+  requestAnimationFrame(update);
+}
+
+// Debug controls
+const dbgBtn=document.getElementById('dbgToggle');
+const dbgIn=document.getElementById('dbgInputs');
+const dbgH=document.getElementById('dbgH');
+const dbgM=document.getElementById('dbgM');
+
+dbgBtn.addEventListener('click',()=>{
+  manual=!manual;
+  dbgBtn.classList.toggle('active',manual);
+  dbgIn.classList.toggle('show',manual);
+  if(manual){
+    const n=new Date(); manH=n.getHours(); manM=n.getMinutes();
+    dbgH.value=manH; dbgM.value=manM;
+    wasDay=null;
+  } else { wasDay=null; }
+});
+dbgH.addEventListener('input',()=>{ manH=Math.max(0,Math.min(23,+dbgH.value||0)); });
+dbgM.addEventListener('input',()=>{ manM=Math.max(0,Math.min(59,+dbgM.value||0)); });
+
+// Help modal
+const helpBtn=document.getElementById('helpToggle');
+const helpOv=document.getElementById('helpOverlay');
+const helpCl=document.getElementById('helpClose');
+helpBtn.addEventListener('click',()=>{ helpOv.classList.add('show'); });
+helpCl.addEventListener('click',()=>{ helpOv.classList.remove('show'); });
+helpOv.addEventListener('click',(e)=>{ if(e.target===helpOv) helpOv.classList.remove('show'); });
+
+build();
+requestAnimationFrame(update);
+</script>
+</body>
+</html>

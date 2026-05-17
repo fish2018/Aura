@@ -189,6 +189,7 @@ class MainActivity : AppCompatActivity() {
             },
             "RemotePreviewPlayer"
         )
+        WallpaperPreferences.migrateBuiltInDefaults(this)
 
         binding.previewStatus.setOnClickListener {
             binding.previewStatus.isVisible = false
@@ -601,7 +602,7 @@ class MainActivity : AppCompatActivity() {
         cancelPendingPreviewLoadTask()
         cancelPreviewStabilizationTasks()
         val isLocalVideo = isLocalMode && currentLocalType == LocalContentType.VIDEO
-        val targetUrl = if (forceReload && !isLocalFileUrl(url)) {
+        val targetUrl = if (forceReload && !isFileUrl(url)) {
             val separator = if (url.contains("?")) "&" else "?"
             "$url${separator}t=${System.currentTimeMillis()}"
         } else {
@@ -1202,7 +1203,11 @@ class MainActivity : AppCompatActivity() {
         val trimmed = input.trim()
         if (trimmed.isBlank()) return trimmed
         val normalized = trimmed.lowercase(Locale.US)
-        return if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+        return if (
+            normalized.startsWith("http://") ||
+            normalized.startsWith("https://") ||
+            normalized.startsWith("file://")
+        ) {
             trimmed
         } else {
             "https://$trimmed"
@@ -1210,7 +1215,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isValidUrl(url: String): Boolean =
-        url.isNotBlank() && (URLUtil.isNetworkUrl(url) || Patterns.WEB_URL.matcher(url).matches())
+        url.isNotBlank() &&
+            (
+                URLUtil.isNetworkUrl(url) ||
+                    isBuiltInAssetUrl(url) ||
+                    Patterns.WEB_URL.matcher(url).matches()
+                )
 
     private fun setUrlDirty(isDirty: Boolean) {
         urlDirty = isDirty
@@ -1492,8 +1502,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isLocalFileUrl(url: String): Boolean =
+        isFileUrl(url) && !isBuiltInAssetUrl(url)
+
+    private fun isFileUrl(url: String): Boolean =
         runCatching { Uri.parse(url).scheme.equals("file", ignoreCase = true) }
             .getOrDefault(false)
+
+    private fun isBuiltInAssetUrl(url: String): Boolean =
+        url.equals(WallpaperPreferences.BUILT_IN_TIME_URL, ignoreCase = true) ||
+            runCatching {
+                val parsed = Uri.parse(url)
+                parsed.scheme.equals("file", ignoreCase = true) &&
+                    parsed.path.orEmpty().startsWith("/android_asset/")
+            }.getOrDefault(false)
 
     private fun openLocalFilePicker() {
         pickLocalFileLauncher.launch(

@@ -6,7 +6,10 @@ import org.json.JSONArray
 
 object WallpaperPreferences {
     const val KEY_URL: String = "wallpaper_url"
-    const val DEFAULT_URL: String = "https://www.252035.xyz/time.html"
+    const val KEY_BUILT_IN_DEFAULTS_MIGRATED: String = "built_in_defaults_migrated"
+    const val BUILT_IN_TIME_URL: String = "file:///android_asset/time.html"
+    const val LEGACY_DEFAULT_URL: String = "https://www.252035.xyz/time.html"
+    const val DEFAULT_URL: String = BUILT_IN_TIME_URL
     const val KEY_IMAGE_DISPLAY_MODE: String = "image_display_mode"
     const val KEY_ALLOW_INTERACTION: String = "allow_interaction"
     const val KEY_ALLOW_MEDIA: String = "allow_media"
@@ -93,6 +96,73 @@ object WallpaperPreferences {
         bumpUrlVersion(context)
     }
 
+    fun migrateBuiltInDefaults(context: Context) {
+        val prefs = prefs(context)
+        if (prefs.getBoolean(KEY_BUILT_IN_DEFAULTS_MIGRATED, false)) {
+            return
+        }
+        val editor = prefs.edit()
+        var changed = true
+        val storedUrl = prefs.getString(KEY_URL, null)
+        if (storedUrl == LEGACY_DEFAULT_URL) {
+            editor.putString(KEY_URL, DEFAULT_URL)
+        }
+        val rawPlaylist = prefs.getString(KEY_WEB_PLAYLIST, null)
+        if (!rawPlaylist.isNullOrBlank()) {
+            val array = runCatching { JSONArray(rawPlaylist) }.getOrNull()
+            if (array != null) {
+                val migrated = mutableListOf<String>()
+                var playlistChanged = false
+                val currentIndex = prefs.getInt(KEY_WEB_PLAYLIST_INDEX, 0)
+                val selectedUrl = if (currentIndex in 0 until array.length()) {
+                    migrateLegacyDefaultUrl(array.optString(currentIndex).orEmpty())
+                } else {
+                    null
+                }
+                for (index in 0 until array.length()) {
+                    val original = array.optString(index).orEmpty()
+                    val value = migrateLegacyDefaultUrl(original)
+                    if (value != original) {
+                        playlistChanged = true
+                    }
+                    if (value.isNotBlank()) {
+                        if (migrated.none { it.equals(value, ignoreCase = true) }) {
+                            migrated.add(value)
+                        } else {
+                            playlistChanged = true
+                        }
+                    }
+                }
+                if (playlistChanged) {
+                    val migratedArray = JSONArray()
+                    migrated.forEach { migratedArray.put(it) }
+                    editor.putString(KEY_WEB_PLAYLIST, migratedArray.toString())
+                    if (migrated.isNotEmpty()) {
+                        val migratedIndex = selectedUrl?.let { selected ->
+                            migrated.indexOfFirst { it.equals(selected, ignoreCase = true) }
+                        } ?: -1
+                        editor.putInt(
+                            KEY_WEB_PLAYLIST_INDEX,
+                            when {
+                                migratedIndex != -1 -> migratedIndex
+                                currentIndex in migrated.indices -> currentIndex
+                                else -> migrated.lastIndex
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        val pendingUrl = prefs.getString(KEY_PENDING_URL, null)
+        if (pendingUrl == LEGACY_DEFAULT_URL) {
+            editor.putString(KEY_PENDING_URL, DEFAULT_URL)
+        }
+        editor.putBoolean(KEY_BUILT_IN_DEFAULTS_MIGRATED, true)
+        if (changed) {
+            editor.apply()
+        }
+    }
+
     fun readUrlVersion(context: Context): Long =
         prefs(context).getLong(KEY_URL_VERSION, 0L)
 
@@ -168,9 +238,13 @@ object WallpaperPreferences {
 
     fun writeWebPlaylist(context: Context, urls: List<String>) {
         val array = JSONArray()
-        urls.filter { it.isNotBlank() }.forEach { array.put(it) }
+        urls.filter { it.isNotBlank() }
+            .forEach { array.put(it) }
         prefs(context).edit().putString(KEY_WEB_PLAYLIST, array.toString()).apply()
     }
+
+    private fun migrateLegacyDefaultUrl(url: String): String =
+        if (url == LEGACY_DEFAULT_URL) DEFAULT_URL else url
 
     fun readWebPlaylistIndex(context: Context): Int =
         prefs(context).getInt(KEY_WEB_PLAYLIST_INDEX, 0)

@@ -30,6 +30,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebChromeClient
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -76,6 +78,9 @@ class WebWallpaperService : WallpaperService() {
         private val mainHandler = Handler(Looper.getMainLooper())
         private val logTag = "WebWallpaperService"
         private val displayManager = applicationContext.getSystemService(DisplayManager::class.java)
+        private var activeSurfaceHolder: SurfaceHolder? = null
+        private var activeSurfaceWidth: Int = 0
+        private var activeSurfaceHeight: Int = 0
         private var virtualDisplay: VirtualDisplay? = null
         private var presentation: WallpaperPresentation? = null
         private var webView: WebView? = null
@@ -86,6 +91,7 @@ class WebWallpaperService : WallpaperService() {
         private var remoteVideoPlayer: DoubleBufferedVideoPlayer? = null
         private var pendingLoadTask: Runnable? = null
         private var pendingPreferenceReload: Runnable? = null
+        private var pendingWebRetryTask: Runnable? = null
         private var pendingClearTask: Runnable? = null
         private var wallpaperChangedReceiverRegistered: Boolean = false
         private var imageDisplayMode: ImageDisplayMode = WallpaperPreferences.DEFAULT_IMAGE_DISPLAY_MODE
@@ -102,6 +108,10 @@ class WebWallpaperService : WallpaperService() {
         private var currentLocalIsVr: Boolean = false
         private var currentRemoteVideoUrl: String? = null
         private var pendingLocalVideoPath: String? = null
+        private var activeWebLoadUrl: String? = null
+        private var activeWebLoadHadMainFrameError: Boolean = false
+        private var lastFailedWebUrl: String? = null
+        private var webRetryAttempts: Int = 0
         private var playlistRotationEnabled: Boolean = false
         private var playlistOrder: PlaylistOrder = PlaylistOrder.SEQUENTIAL
         private var playlistMode: PlaylistMode = PlaylistMode.INTERVAL
@@ -159,6 +169,13 @@ class WebWallpaperService : WallpaperService() {
                 scheduleAutoRefresh()
             }
         }
+        private val webRetryDelaysMillis = longArrayOf(
+            5_000L,
+            15_000L,
+            30_000L,
+            60_000L,
+            300_000L
+        )
         private val playlistRotationRunnable = object : Runnable {
             override fun run() {
                 if (
@@ -193,6 +210,7 @@ class WebWallpaperService : WallpaperService() {
 
         override fun onCreate(holder: SurfaceHolder) {
             super.onCreate(holder)
+            WallpaperPreferences.migrateBuiltInDefaults(applicationContext)
             setTouchEventsEnabled(false)
             imageDisplayMode = WallpaperPreferences.readImageDisplayMode(applicationContext)
             registerWallpaperChangedReceiver()
@@ -214,6 +232,9 @@ class WebWallpaperService : WallpaperService() {
             height: Int
         ) {
             super.onSurfaceChanged(holder, format, width, height)
+            activeSurfaceHolder = holder
+            activeSurfaceWidth = width
+            activeSurfaceHeight = height
             attachContent(holder, width, height)
         }
 
@@ -316,6 +337,7 @@ class WebWallpaperService : WallpaperService() {
                     }
 
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
+                        markWebLoadSucceeded(url, "onPageCommitVisible")
                         view?.let {
                             applyImageDisplayModeIfNeeded(it)
                             WebInteractionSupport.applyCompatibilityFixes(it)
@@ -323,10 +345,49 @@ class WebWallpaperService : WallpaperService() {
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
+                        markWebLoadSucceeded(url, "onPageFinished")
                         view?.let {
                             applyImageDisplayModeIfNeeded(it)
                             WebInteractionSupport.applyCompatibilityFixes(it)
                         }
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
+                        if (request?.isForMainFrame != false) {
+                            handleMainFrameWebError(
+                                request?.url?.toString() ?: view?.url,
+                                "onReceivedError:${error?.errorCode}"
+                            )
+                        }
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?
+                    ) {
+                        if (request?.isForMainFrame == true) {
+                            handleMainFrameWebError(
+                                request.url.toString(),
+                                "onReceivedHttpError:${errorResponse?.statusCode}"
+                            )
+                        }
+                    }
+
+                    override fun onRenderProcessGone(
+                        view: WebView?,
+                        detail: RenderProcessGoneDetail?
+                    ): Boolean {
+                        Log.w(
+                            logTag,
+                            "web render process gone didCrash=${detail?.didCrash()} priority=${detail?.rendererPriorityAtExit()}"
+                        )
+                        recreateHostAfterRenderProcessGone()
+                        return true
                     }
                 }
                 webChromeClient = WebChromeClient()
@@ -336,7 +397,7 @@ class WebWallpaperService : WallpaperService() {
                 domStorageEnabled = true
                 useWideViewPort = true
                 loadWithOverviewMode = true
-                cacheMode = WebSettings.LOAD_NO_CACHE
+                cacheMode = WebSettings.LOAD_DEFAULT
                 allowFileAccess = true
                 allowFileAccessFromFileURLs = true
                 allowUniversalAccessFromFileURLs = true
@@ -345,6 +406,100 @@ class WebWallpaperService : WallpaperService() {
 
         private fun applyImageDisplayModeIfNeeded(webView: WebView) {
             ImageWallpaperSupport.applyStandaloneImageMode(webView, imageDisplayMode)
+        }
+
+        private fun markWebLoadSucceeded(url: String?, reason: String) {
+            if (activeWebLoadHadMainFrameError) {
+                Log.d(logTag, "ignore web success callback after main-frame error reason=$reason url=$url")
+                return
+            }
+            if (url.isNullOrBlank() || url == "about:blank") {
+                return
+            }
+            Log.d(logTag, "web load visible reason=$reason url=$url")
+            activeWebLoadUrl = url
+            lastFailedWebUrl = null
+            webRetryAttempts = 0
+            cancelPendingWebRetry(resetFailure = false)
+        }
+
+        private fun handleMainFrameWebError(url: String?, reason: String) {
+            val failedUrl = url?.takeIf { it.isNotBlank() } ?: activeWebLoadUrl ?: return
+            activeWebLoadHadMainFrameError = true
+            lastFailedWebUrl = failedUrl
+            Log.w(logTag, "main-frame web load failed reason=$reason url=$failedUrl")
+            scheduleWebRetry(failedUrl, immediate = false)
+        }
+
+        private fun scheduleWebRetry(url: String, immediate: Boolean) {
+            if (url.isBlank() || isLocalAssetUrl(url)) {
+                return
+            }
+            pendingWebRetryTask?.let { mainHandler.removeCallbacks(it) }
+            val loadToken = contentLoadToken
+            val token = webViewToken
+            val delayMillis = if (immediate) {
+                0L
+            } else {
+                webRetryDelaysMillis[
+                    webRetryAttempts.coerceIn(0, webRetryDelaysMillis.lastIndex)
+                ]
+            }
+            if (!immediate) {
+                webRetryAttempts += 1
+            }
+            val task = Runnable {
+                pendingWebRetryTask = null
+                if (
+                    token != webViewToken ||
+                    loadToken != contentLoadToken ||
+                    lastFailedWebUrl != url ||
+                    webView == null
+                ) {
+                    return@Runnable
+                }
+                if (!shouldRunContent()) {
+                    return@Runnable
+                }
+                Log.d(logTag, "retry web load attempt=$webRetryAttempts url=$url")
+                loadFromPreferences()
+            }
+            pendingWebRetryTask = task
+            mainHandler.postDelayed(task, delayMillis)
+        }
+
+        private fun retryFailedWebLoadIfNeeded() {
+            val failedUrl = lastFailedWebUrl ?: return
+            if (shouldRunContent()) {
+                scheduleWebRetry(failedUrl, immediate = true)
+            }
+        }
+
+        private fun cancelPendingWebRetry(resetFailure: Boolean) {
+            pendingWebRetryTask?.let { mainHandler.removeCallbacks(it) }
+            pendingWebRetryTask = null
+            if (resetFailure) {
+                lastFailedWebUrl = null
+                webRetryAttempts = 0
+                activeWebLoadHadMainFrameError = false
+            }
+        }
+
+        private fun isLocalAssetUrl(url: String): Boolean =
+            runCatching {
+                val parsed = Uri.parse(url)
+                parsed.scheme.equals("file", ignoreCase = true) &&
+                    parsed.path.orEmpty().startsWith("/android_asset/")
+            }.getOrDefault(false)
+
+        private fun recreateHostAfterRenderProcessGone() {
+            val holder = activeSurfaceHolder
+            val width = activeSurfaceWidth
+            val height = activeSurfaceHeight
+            releaseHost()
+            if (holder?.surface?.isValid == true && width > 0 && height > 0) {
+                attachContent(holder, width, height)
+            }
         }
 
         private fun schedulePreferenceReload() {
@@ -358,6 +513,7 @@ class WebWallpaperService : WallpaperService() {
         }
 
         private fun loadFromPreferences() {
+            cancelPendingWebRetry(resetFailure = false)
             pendingPreviewState = if (isPreview) {
                 WallpaperPreferences.readPendingState(applicationContext)
             } else {
@@ -366,24 +522,32 @@ class WebWallpaperService : WallpaperService() {
             val pending = pendingPreviewState
             imageDisplayMode = pending?.imageDisplayMode
                 ?: WallpaperPreferences.readImageDisplayMode(applicationContext)
-            if (pending != null) {
+            val configuredUrl = pending?.url ?: WallpaperPreferences.readUrl(applicationContext)
+            val localModeActive =
+                (pending?.lastModeLocal ?: WallpaperPreferences.readLastModeIsLocal(applicationContext)) &&
+                    !isLocalAssetUrl(configuredUrl)
+            if (localModeActive && pending != null) {
                 currentLocalPath = pending.localFilePath
                 currentLocalType = LocalContentType.fromOrdinal(pending.localFileType)
                 currentLocalIsVr = pending.localIsVr
-            } else {
+            } else if (localModeActive) {
                 currentLocalPath = WallpaperPreferences.readLocalFilePath(applicationContext)
                 currentLocalType =
                     LocalContentType.fromOrdinal(
                         WallpaperPreferences.readLocalFileType(applicationContext)
                     )
                 currentLocalIsVr = WallpaperPreferences.readLocalIsVr(applicationContext)
+            } else {
+                currentLocalPath = null
+                currentLocalType = LocalContentType.NONE
+                currentLocalIsVr = false
             }
-            val url = if (currentLocalType == LocalContentType.IMAGE) {
+            val url = if (localModeActive && currentLocalType == LocalContentType.IMAGE) {
                 currentLocalPath?.let { path ->
                     File(path).takeIf { it.exists() }?.let { buildLocalUrl(it, LocalContentType.IMAGE) }
-                } ?: pending?.url ?: WallpaperPreferences.readUrl(applicationContext)
+                } ?: configuredUrl
             } else {
-                pending?.url ?: WallpaperPreferences.readUrl(applicationContext)
+                configuredUrl
             }
             Log.d(
                 logTag,
@@ -448,6 +612,12 @@ class WebWallpaperService : WallpaperService() {
                     }
                     showWebContent()
                     target.stopLoading()
+                    if (lastFailedWebUrl != url) {
+                        lastFailedWebUrl = null
+                        webRetryAttempts = 0
+                    }
+                    activeWebLoadUrl = url
+                    activeWebLoadHadMainFrameError = false
                     if (remoteImageHtml.isNullOrBlank()) {
                         target.loadUrl(url)
                     } else {
@@ -471,8 +641,15 @@ class WebWallpaperService : WallpaperService() {
             if (uri?.scheme != "file") {
                 return false
             }
+            if (isLocalAssetUrl(url)) {
+                return false
+            }
             val path = currentLocalPath
             if (path.isNullOrEmpty()) return false
+            val urlPath = uri.path ?: return false
+            if (File(urlPath).absolutePath != File(path).absolutePath) {
+                return false
+            }
             if (currentLocalType != LocalContentType.VIDEO) {
                 currentLocalIsVr = false
                 return false
@@ -597,6 +774,9 @@ class WebWallpaperService : WallpaperService() {
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
+            activeSurfaceHolder = null
+            activeSurfaceWidth = 0
+            activeSurfaceHeight = 0
             releaseHost()
         }
 
@@ -749,6 +929,7 @@ class WebWallpaperService : WallpaperService() {
                 mainHandler.removeCallbacks(autoRefreshRunnable)
                 mainHandler.removeCallbacks(playlistRotationRunnable)
                 mainHandler.removeCallbacks(localBatchRotationRunnable)
+                cancelPendingWebRetry(resetFailure = true)
                 val view = webView
                 webView = null
                 webViewToken++
@@ -981,6 +1162,7 @@ class WebWallpaperService : WallpaperService() {
             scheduleAutoRefresh()
             schedulePlaylistRotation()
             scheduleLocalBatchRotation()
+            retryFailedWebLoadIfNeeded()
         }
 
         private fun scheduleAutoRefresh() {
@@ -1082,7 +1264,7 @@ class WebWallpaperService : WallpaperService() {
         private fun isLocalContentActive(): Boolean {
             val url = WallpaperPreferences.readUrl(applicationContext)
             val scheme = runCatching { Uri.parse(url).scheme }.getOrNull()
-            return scheme.equals("file", ignoreCase = true)
+            return scheme.equals("file", ignoreCase = true) && !isLocalAssetUrl(url)
         }
 
         private fun refreshLocalBatchConfig() {
