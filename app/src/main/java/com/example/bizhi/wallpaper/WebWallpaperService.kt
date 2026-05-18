@@ -13,6 +13,10 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -78,6 +82,8 @@ class WebWallpaperService : WallpaperService() {
         private val mainHandler = Handler(Looper.getMainLooper())
         private val logTag = "WebWallpaperService"
         private val displayManager = applicationContext.getSystemService(DisplayManager::class.java)
+        private val connectivityManager =
+            applicationContext.getSystemService(ConnectivityManager::class.java)
         private var activeSurfaceHolder: SurfaceHolder? = null
         private var activeSurfaceWidth: Int = 0
         private var activeSurfaceHeight: Int = 0
@@ -112,6 +118,8 @@ class WebWallpaperService : WallpaperService() {
         private var activeWebLoadHadMainFrameError: Boolean = false
         private var lastFailedWebUrl: String? = null
         private var webRetryAttempts: Int = 0
+        private var networkCallbackRegistered: Boolean = false
+        private var networkValidated: Boolean = false
         private var playlistRotationEnabled: Boolean = false
         private var playlistOrder: PlaylistOrder = PlaylistOrder.SEQUENTIAL
         private var playlistMode: PlaylistMode = PlaylistMode.INTERVAL
@@ -207,6 +215,25 @@ class WebWallpaperService : WallpaperService() {
                 }
             }
         }
+        private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                handleNetworkChanged("available")
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities
+            ) {
+                handleNetworkChanged("capabilities")
+            }
+
+            override fun onLost(network: Network) {
+                mainHandler.post {
+                    networkValidated = hasValidatedNetwork()
+                    Log.d(logTag, "network lost validated=$networkValidated")
+                }
+            }
+        }
 
         override fun onCreate(holder: SurfaceHolder) {
             super.onCreate(holder)
@@ -214,6 +241,7 @@ class WebWallpaperService : WallpaperService() {
             setTouchEventsEnabled(false)
             imageDisplayMode = WallpaperPreferences.readImageDisplayMode(applicationContext)
             registerWallpaperChangedReceiver()
+            registerNetworkCallback()
             WallpaperPreferences.registerListener(applicationContext, this)
             applyBehaviorPreferences()
         }
@@ -427,6 +455,7 @@ class WebWallpaperService : WallpaperService() {
             val failedUrl = url?.takeIf { it.isNotBlank() } ?: activeWebLoadUrl ?: return
             activeWebLoadHadMainFrameError = true
             lastFailedWebUrl = failedUrl
+            networkValidated = hasValidatedNetwork()
             Log.w(logTag, "main-frame web load failed reason=$reason url=$failedUrl")
             scheduleWebRetry(failedUrl, immediate = false)
         }
@@ -473,6 +502,28 @@ class WebWallpaperService : WallpaperService() {
             if (shouldRunContent()) {
                 scheduleWebRetry(failedUrl, immediate = true)
             }
+        }
+
+        private fun handleNetworkChanged(reason: String) {
+            mainHandler.post {
+                networkValidated = hasValidatedNetwork()
+                Log.d(
+                    logTag,
+                    "network changed reason=$reason validated=$networkValidated failedUrl=$lastFailedWebUrl"
+                )
+                if (!networkValidated) {
+                    return@post
+                }
+                retryFailedWebLoadIfNeeded()
+            }
+        }
+
+        private fun hasValidatedNetwork(): Boolean {
+            val manager = connectivityManager ?: return false
+            val activeNetwork = manager.activeNetwork ?: return false
+            val capabilities = manager.getNetworkCapabilities(activeNetwork) ?: return false
+            return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         }
 
         private fun cancelPendingWebRetry(resetFailure: Boolean) {
@@ -851,6 +902,7 @@ class WebWallpaperService : WallpaperService() {
                 }
             }
             unregisterWallpaperChangedReceiver()
+            unregisterNetworkCallback()
             WallpaperPreferences.unregisterListener(applicationContext, this)
             releaseHost()
         }
@@ -1092,6 +1144,37 @@ class WebWallpaperService : WallpaperService() {
             }
             applicationContext.unregisterReceiver(wallpaperChangedReceiver)
             wallpaperChangedReceiverRegistered = false
+        }
+
+        private fun registerNetworkCallback() {
+            val manager = connectivityManager ?: return
+            if (networkCallbackRegistered) {
+                return
+            }
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            runCatching {
+                manager.registerNetworkCallback(request, networkCallback)
+                networkCallbackRegistered = true
+                networkValidated = hasValidatedNetwork()
+                Log.d(logTag, "network callback registered validated=$networkValidated")
+            }.onFailure { error ->
+                Log.w(logTag, "register network callback failed", error)
+            }
+        }
+
+        private fun unregisterNetworkCallback() {
+            val manager = connectivityManager ?: return
+            if (!networkCallbackRegistered) {
+                return
+            }
+            runCatching {
+                manager.unregisterNetworkCallback(networkCallback)
+            }.onFailure { error ->
+                Log.w(logTag, "unregister network callback failed", error)
+            }
+            networkCallbackRegistered = false
         }
 
         private fun cancelPendingClear() {
